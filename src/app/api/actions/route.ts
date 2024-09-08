@@ -11,8 +11,9 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import { Program, AnchorProvider } from "@coral-xyz/anchor";
-import * as idl from "../../../types/picassol.json";
+import { Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
+import { Picassol } from "@/types/picassol";
+import idl from "@/types/picassol.json";
 
 const headers = createActionHeaders();
 
@@ -58,7 +59,7 @@ export const POST = async (req: Request) => {
       { publicKey: userPubkey } as any,
       { commitment: "confirmed" }
     );
-    const program = new Program(idl as any, provider);
+    const program = new Program(idl as unknown as Idl, provider);
 
     // Generate random pixel data
     const posX = Math.floor(Math.random() * 64);
