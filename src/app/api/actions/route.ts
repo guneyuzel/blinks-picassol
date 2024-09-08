@@ -11,16 +11,14 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { Program, AnchorProvider } from "@coral-xyz/anchor";
 import { Picassol, IDL } from "@/types/picassol";
 
-
 const headers = createActionHeaders();
 
-const programId = new PublicKey(
-  "5rV2CJ8bYV4qEt8qcmhZ1Ty3o6eM7K1LAJDDFipPNyx2"
-);
+const programId = new PublicKey("5rV2CJ8bYV4qEt8qcmhZ1Ty3o6eM7K1LAJDDFipPNyx2");
 
 export const GET = async (req: Request) => {
   try {
@@ -57,7 +55,8 @@ export const POST = async (req: Request) => {
 
     // Connect to the Solana network
     const connection = new Connection(
-      process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com"
+      process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT ||
+        "https://api.devnet.solana.com"
     );
 
     // Create an AnchorProvider
@@ -68,11 +67,7 @@ export const POST = async (req: Request) => {
     );
 
     // Initialize the program
-    const program = new Program(
-      IDL,
-      programId,
-      provider
-    );
+    const program = new Program(IDL, programId, provider);
 
     // Generate random pixel data
     const posX = Math.floor(Math.random() * 200);
@@ -94,7 +89,8 @@ export const POST = async (req: Request) => {
     const pixelAccount = await connection.getAccountInfo(pixelPubkey);
     if (!pixelAccount) {
       transaction.add(
-        await program.methods.createPixel(posX, posY, colR, colG, colB)
+        await program.methods
+          .createPixel(posX, posY, colR, colG, colB)
           .accounts({
             pixel: pixelPubkey,
             user: userPubkey,
@@ -104,11 +100,32 @@ export const POST = async (req: Request) => {
       );
     } else {
       transaction.add(
-        await program.methods.updatePixel(colR, colG, colB)
+        await program.methods
+          .updatePixel(colR, colG, colB)
           .accounts({
             pixel: pixelPubkey,
           })
           .instruction()
+      );
+    }
+
+    // Add fee logic
+    const feeRecipient = new PublicKey(
+      process.env.NEXT_PUBLIC_FEE_RECIPIENT_ADDRESS || ""
+    );
+    const feeAmountSol = parseFloat(
+      process.env.NEXT_PUBLIC_FEE_AMOUNT_SOL || "0"
+    );
+    const feeLamports = feeAmountSol * LAMPORTS_PER_SOL;
+
+    // Add fee transfer instruction
+    if (feeLamports > 0) {
+      transaction.add(
+        SystemProgram.transfer({
+          fromPubkey: userPubkey,
+          toPubkey: feeRecipient,
+          lamports: feeLamports,
+        })
       );
     }
 
@@ -128,7 +145,10 @@ export const POST = async (req: Request) => {
   } catch (err) {
     console.error(err);
     return Response.json(
-      { error: "An error occurred", details: err instanceof Error ? err.message : String(err) },
+      {
+        error: "An error occurred",
+        details: err instanceof Error ? err.message : String(err),
+      },
       { status: 500, headers }
     );
   }
