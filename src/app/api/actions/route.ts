@@ -21,7 +21,7 @@ const PROGRAM_ID = new PublicKey(
 export const GET = async (req: Request) => {
   const payload: ActionGetResponse = {
     title: "Color a Random Pixel",
-    icon: "https://your-icon-url.com/icon.png", // Replace with your icon URL
+    icon: "https://fps.cdnpk.net/images/home/subhome-ai.webp?w=649&h=649", // Replace with your icon URL
     description: "Color a random pixel on the Picassol canvas",
     label: "Color Pixel",
     links: {
