@@ -1,106 +1,194 @@
 import {
   ActionPostResponse,
-  createActionHeaders,
   createPostResponse,
   ActionGetResponse,
   ActionPostRequest,
+  createActionHeaders,
 } from "@solana/actions";
-import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
-import { AnchorProvider, Program } from "@coral-xyz/anchor";
-import * as IDL from "../../../types/picassol.json";
+import {
+  clusterApiUrl,
+  Connection,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 
-const headers = createActionHeaders({
-  chainId: "devnet",
-  actionVersion: "2.2.1",
-});
-
-const PROGRAM_ID = new PublicKey(
-  "5rV2CJ8bYV4qEt8qcmhZ1Ty3o6eM7K1LAJDDFipPNyx2"
-);
+const headers = createActionHeaders();
 
 export const GET = async (req: Request) => {
-  const payload: ActionGetResponse = {
-    title: "Color a Random Pixel",
-    icon: "https://fps.cdnpk.net/images/home/subhome-ai.webp?w=649&h=649",
-    description: "Color a random pixel on the Picassol canvas",
-    label: "Color Pixel",
-    links: {
-      actions: [
-        {
-          label: "Color Random Pixel",
-          href: "/api/actions",
-        },
-        {
-          label: "Custom Color",
-          href: "/api/actions?r={r}&g={g}&b={b}",
-          parameters: [
-            { name: "r", label: "Red (0-255)", type: "number", required: true },
-            { name: "g", label: "Green (0-255)", type: "number", required: true },
-            { name: "b", label: "Blue (0-255)", type: "number", required: true },
-          ],
-        },
-      ],
-    },
-  };
-
-  return Response.json(payload, { headers });
-};
-
-export const POST = async (req: Request) => {
   try {
-    const body: ActionPostRequest = await req.json();
-    const userPublicKey = new PublicKey(body.account);
+    const requestUrl = new URL(req.url);
+    const { toPubkey } = validatedQueryParams(requestUrl);
 
-    const url = new URL(req.url);
-    const r = parseInt(url.searchParams.get("r") || String(Math.floor(Math.random() * 256)));
-    const g = parseInt(url.searchParams.get("g") || String(Math.floor(Math.random() * 256)));
-    const b = parseInt(url.searchParams.get("b") || String(Math.floor(Math.random() * 256)));
+    const baseHref = new URL(
+      `/api/actions/donate-sol?to=${toPubkey.toBase58()}`,
+      requestUrl.origin
+    ).toString();
 
-    // Generate random pixel position
-    const posX = Math.floor(Math.random() * 200);
-    const posY = Math.floor(Math.random() * 200);
-
-    // Set up connection and provider
-    const connection = new Connection("https://api.devnet.solana.com");
-    const provider = new AnchorProvider(
-      connection,
-      { publicKey: userPublicKey } as any,
-      { commitment: "processed" }
-    );
-
-    // Create program instance
-    const program = new Program(IDL as any, provider);
-
-    // Create transaction
-    const transaction = await (program.methods
-      .createPixel(posX, posY, r, g, b) as any)
-      .accounts({
-        pixel: PublicKey.findProgramAddressSync(
-          [Buffer.from("pixel"), Buffer.from([posX, posY])],
-          PROGRAM_ID
-        )[0],
-        user: userPublicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .transaction();
-
-    const payload: ActionPostResponse = await createPostResponse({
-      fields: {
-        transaction,
-        message: `Color a random pixel at (${posX}, ${posY}) with RGB(${r}, ${g}, ${b})`,
+    const payload: ActionGetResponse = {
+      type: "action",
+      title: "Donate SOL to Alice",
+      icon: "https://ucarecdn.com/7aa46c85-08a4-4bc7-9376-88ec48bb1f43/-/preview/880x864/-/quality/smart/-/format/auto/",
+      description:
+        "Cybersecurity Enthusiast | Support my research with a donation.",
+      label: "Transfer", // this value will be ignored since `links.actions` exists
+      links: {
+        actions: [
+          {
+            label: "Send 1 SOL", // button text
+            href: `${baseHref}&amount=${"1"}`,
+          },
+          {
+            label: "Send 5 SOL", // button text
+            href: `${baseHref}&amount=${"5"}`,
+          },
+          {
+            label: "Send 10 SOL", // button text
+            href: `${baseHref}&amount=${"10"}`,
+          },
+          {
+            label: "Send SOL", // button text
+            href: `${baseHref}&amount={amount}`, // this href will have a text input
+            parameters: [
+              {
+                name: "amount", // parameter name in the `href` above
+                label: "Enter the amount of SOL to send", // placeholder of the text input
+                required: true,
+              },
+            ],
+          },
+        ],
       },
-    });
+    };
 
-    return Response.json(payload, { headers });
+    return Response.json(payload, {
+      headers,
+    });
   } catch (err) {
-    console.error(err);
-    return new Response("An error occurred while processing the request", {
-      status: 500,
+    console.log(err);
+    let message = "An unknown error occurred";
+    if (typeof err == "string") message = err;
+    return new Response(message, {
+      status: 400,
       headers,
     });
   }
 };
 
+// DO NOT FORGET TO INCLUDE THE `OPTIONS` HTTP METHOD
+// THIS WILL ENSURE CORS WORKS FOR BLINKS
 export const OPTIONS = async (req: Request) => {
   return new Response(null, { headers });
 };
+
+export const POST = async (req: Request) => {
+  try {
+    const requestUrl = new URL(req.url);
+    const { amount, toPubkey } = validatedQueryParams(requestUrl);
+
+    const body: ActionPostRequest = await req.json();
+
+    // validate the client provided input
+    let account: PublicKey;
+    try {
+      account = new PublicKey(body.account);
+    } catch (err) {
+      return new Response('Invalid "account" provided', {
+        status: 400,
+        headers,
+      });
+    }
+
+    const connection = new Connection(
+      process.env.SOLANA_RPC! || clusterApiUrl("mainnet-beta")
+    );
+
+    // ensure the receiving account will be rent exempt
+    const minimumBalance = await connection.getMinimumBalanceForRentExemption(
+      0 // note: simple accounts that just store native SOL have `0` bytes of data
+    );
+    if (amount * LAMPORTS_PER_SOL < minimumBalance) {
+      throw `account may not be rent exempt: ${toPubkey.toBase58()}`;
+    }
+
+    // create an instruction to transfer native SOL from one wallet to another
+    const transferSolInstruction = SystemProgram.transfer({
+      fromPubkey: account,
+      toPubkey: toPubkey,
+      lamports: amount * LAMPORTS_PER_SOL,
+    });
+
+    // get the latest blockhash amd block height
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
+
+    // create a legacy transaction
+    const transaction = new Transaction({
+      feePayer: account,
+      blockhash,
+      lastValidBlockHeight,
+    }).add(transferSolInstruction);
+
+    // versioned transactions are also supported
+    // const transaction = new VersionedTransaction(
+    //   new TransactionMessage({
+    //     payerKey: account,
+    //     recentBlockhash: blockhash,
+    //     instructions: [transferSolInstruction],
+    //   }).compileToV0Message(),
+    //   // note: you can also use `compileToLegacyMessage`
+    // );
+
+    const payload: ActionPostResponse = await createPostResponse({
+      fields: {
+        transaction,
+        message: `Sent ${amount} SOL to Alice: ${toPubkey.toBase58()}`,
+      },
+      // note: no additional signers are needed
+      // signers: [],
+    });
+
+    return Response.json(payload, {
+      headers,
+    });
+  } catch (err) {
+    console.log(err);
+    let message = "An unknown error occurred";
+    if (typeof err == "string") message = err;
+    return new Response(message, {
+      status: 400,
+      headers,
+    });
+  }
+};
+
+function validatedQueryParams(requestUrl: URL) {
+  let toPubkey: PublicKey = new PublicKey(
+    "FWXHZxDocgchBjADAxSuyPCVhh6fNLT7DUggabAsuz1y"
+  );
+  let amount: number = 0.1;
+
+  try {
+    if (requestUrl.searchParams.get("to")) {
+      toPubkey = new PublicKey(requestUrl.searchParams.get("to")!);
+    }
+  } catch (err) {
+    throw "Invalid input query parameter: to";
+  }
+
+  try {
+    if (requestUrl.searchParams.get("amount")) {
+      amount = parseFloat(requestUrl.searchParams.get("amount")!);
+    }
+
+    if (amount <= 0) throw "amount is too small";
+  } catch (err) {
+    throw "Invalid input query parameter: amount";
+  }
+
+  return {
+    amount,
+    toPubkey,
+  };
+}
