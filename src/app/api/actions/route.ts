@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   ActionPostResponse,
   createActionHeaders,
@@ -6,7 +5,7 @@ import {
   ActionGetResponse,
   ActionPostRequest,
 } from "@solana/actions";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
 import { AnchorProvider, Program } from "@coral-xyz/anchor";
 import * as IDL from "../../../types/picassol.json";
 
@@ -31,6 +30,15 @@ export const GET = async (req: Request) => {
           label: "Color Random Pixel",
           href: "/api/actions/random-pixel",
         },
+        {
+          label: "Custom Color",
+          href: "/api/actions/random-pixel?r={r}&g={g}&b={b}",
+          parameters: [
+            { name: "r", label: "Red (0-255)", type: "number", required: true },
+            { name: "g", label: "Green (0-255)", type: "number", required: true },
+            { name: "b", label: "Blue (0-255)", type: "number", required: true },
+          ],
+        },
       ],
     },
   };
@@ -39,50 +47,60 @@ export const GET = async (req: Request) => {
 };
 
 export const POST = async (req: Request) => {
-  const body: ActionPostRequest<string> = await req.json();
+  try {
+    const body: ActionPostRequest = await req.json();
+    const userPublicKey = new PublicKey(body.account);
 
-  // Extract the user's public key from the request
-  const userPublicKey = new PublicKey(body.account);
+    const url = new URL(req.url);
+    const r = parseInt(url.searchParams.get("r") || String(Math.floor(Math.random() * 256)));
+    const g = parseInt(url.searchParams.get("g") || String(Math.floor(Math.random() * 256)));
+    const b = parseInt(url.searchParams.get("b") || String(Math.floor(Math.random() * 256)));
 
-  // Generate random pixel position and color
-  const posX = Math.floor(Math.random() * 200);
-  const posY = Math.floor(Math.random() * 200);
-  const colR = Math.floor(Math.random() * 256);
-  const colG = Math.floor(Math.random() * 256);
-  const colB = Math.floor(Math.random() * 256);
+    // Generate random pixel position
+    const posX = Math.floor(Math.random() * 200);
+    const posY = Math.floor(Math.random() * 200);
 
-  // Set up connection and provider
-  const connection = new Connection("https://api.devnet.solana.com");
-  const provider = new AnchorProvider(
-    connection,
-    { publicKey: userPublicKey } as any,
-    { commitment: "processed" }
-  );
+    // Set up connection and provider
+    const connection = new Connection("https://api.devnet.solana.com");
+    const provider = new AnchorProvider(
+      connection,
+      { publicKey: userPublicKey } as any,
+      { commitment: "processed" }
+    );
 
-  // Create program instance
-  const program = new Program(IDL as any, provider);
+    // Create program instance
+    const program = new Program(IDL as any, provider);
 
-  // Create transaction
-  const transaction = await (program.methods
-    .createPixel(posX, posY, colR, colG, colB) as any)
-    .accounts({
-      pixel: PublicKey.findProgramAddressSync(
-        [Buffer.from("pixel"), Buffer.from([posX, posY])],
-        PROGRAM_ID
-      )[0],
-      user: userPublicKey,
-      systemProgram: PublicKey.default,
-    })
-    .transaction();
+    // Create transaction
+    const transaction = await (program.methods
+      .createPixel(posX, posY, r, g, b) as any)
+      .accounts({
+        pixel: PublicKey.findProgramAddressSync(
+          [Buffer.from("pixel"), Buffer.from([posX, posY])],
+          PROGRAM_ID
+        )[0],
+        user: userPublicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .transaction();
 
-  const payload: ActionPostResponse = await createPostResponse({
-    fields: {
-      transaction, // Pass the transaction object directly
-      message: `Color a random pixel at (${posX}, ${posY}) with RGB(${colR}, ${colG}, ${colB})`,
-    },
-  });
+    const payload: ActionPostResponse = await createPostResponse({
+      fields: {
+        transaction,
+        message: `Color a random pixel at (${posX}, ${posY}) with RGB(${r}, ${g}, ${b})`,
+      },
+    });
 
-  return Response.json(payload, { headers });
+    return Response.json(payload, { headers });
+  } catch (err) {
+    console.error(err);
+    return new Response("An error occurred while processing the request", {
+      status: 500,
+      headers,
+    });
+  }
 };
 
-export const OPTIONS = GET;
+export const OPTIONS = async (req: Request) => {
+  return new Response(null, { headers });
+};
