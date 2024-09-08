@@ -21,18 +21,18 @@ const PROGRAM_ID = new PublicKey(
 export const GET = async (req: Request) => {
   const payload: ActionGetResponse = {
     title: "Color a Random Pixel",
-    icon: "https://fps.cdnpk.net/images/home/subhome-ai.webp?w=649&h=649", // Replace with your icon URL
+    icon: "https://fps.cdnpk.net/images/home/subhome-ai.webp?w=649&h=649",
     description: "Color a random pixel on the Picassol canvas",
     label: "Color Pixel",
     links: {
       actions: [
         {
           label: "Color Random Pixel",
-          href: "/api/actions/random-pixel",
+          href: "/api/actions",
         },
         {
           label: "Custom Color",
-          href: "/api/actions/random-pixel?r={r}&g={g}&b={b}",
+          href: "/api/actions?r={r}&g={g}&b={b}",
           parameters: [
             { name: "r", label: "Red (0-255)", type: "number", required: true },
             { name: "g", label: "Green (0-255)", type: "number", required: true },
