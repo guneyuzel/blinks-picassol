@@ -109,7 +109,11 @@ export const POST = async (req: Request) => {
     return Response.json(payload, { headers });
   } catch (err) {
     console.error(err);
-    return new Response("An error occurred", { status: 500, headers });
+    // Return a JSON error response instead of plain text
+    return Response.json(
+      { error: "An error occurred", details: err instanceof Error ? err.message : String(err) },
+      { status: 500, headers }
+    );
   }
 };
 
