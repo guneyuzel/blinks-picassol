@@ -80,23 +80,21 @@ export const POST = async (req: Request) => {
     const pixelAccount = await connection.getAccountInfo(pixelPubkey);
     if (!pixelAccount) {
       transaction.add(
-        await (program.methods
-          .createPixel(posX, posY, colR, colG, colB)
+        await (program.methods.createPixel(posX, posY, colR, colG, colB) as any)
           .accounts({
             pixel: pixelPubkey,
             user: userPubkey,
             systemProgram: SystemProgram.programId,
-          }) as any)
+          })
           .instruction()
       );
     } else {
       transaction.add(
-        await (program.methods
-          .updatePixel(colR, colG, colB)
+        await (program.methods.updatePixel(colR, colG, colB) as any)
           .accounts({
             pixel: pixelPubkey,
             user: userPubkey,
-          }) as any)
+          })
           .instruction()
       );
     }
