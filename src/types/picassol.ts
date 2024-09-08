@@ -1,11 +1,6 @@
 export type Picassol = {
-  address: "5rV2CJ8bYV4qEt8qcmhZ1Ty3o6eM7K1LAJDDFipPNyx2";
-  metadata: {
-    name: "picassol";
-    version: "0.1.0";
-    spec: "0.1.0";
-    description: "Picassol";
-  };
+  version: "0.1.0";
+  name: "picassol";
   instructions: [
     {
       name: "createPixel";
@@ -170,13 +165,8 @@ export type Picassol = {
 };
 
 export const IDL: Picassol = {
-  address: "5rV2CJ8bYV4qEt8qcmhZ1Ty3o6eM7K1LAJDDFipPNyx2",
-  metadata: {
-    name: "picassol",
-    version: "0.1.0",
-    spec: "0.1.0",
-    description: "Picassol",
-  },
+  version: "0.1.0",
+  name: "picassol",
   instructions: [
     {
       name: "createPixel",

@@ -10,12 +10,17 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
-import { Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
-import { Picassol } from "@/types/picassol";
-import idl from "@/types/picassol.json";
+import { Program, AnchorProvider } from "@coral-xyz/anchor";
+import { Picassol, IDL } from "@/types/picassol";
+
 
 const headers = createActionHeaders();
+
+const programId = new PublicKey(
+  "5rV2CJ8bYV4qEt8qcmhZ1Ty3o6eM7K1LAJDDFipPNyx2"
+);
 
 export const GET = async (req: Request) => {
   try {
@@ -54,16 +59,24 @@ export const POST = async (req: Request) => {
     const connection = new Connection(
       process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com"
     );
+
+    // Create an AnchorProvider
     const provider = new AnchorProvider(
       connection,
       { publicKey: userPubkey } as any,
       { commitment: "confirmed" }
     );
-    const program = new Program(idl as unknown as Idl, provider);
+
+    // Initialize the program
+    const program = new Program(
+      IDL,
+      programId,
+      provider
+    );
 
     // Generate random pixel data
-    const posX = Math.floor(Math.random() * 64);
-    const posY = Math.floor(Math.random() * 64);
+    const posX = Math.floor(Math.random() * 200);
+    const posY = Math.floor(Math.random() * 200);
     const colR = Math.floor(Math.random() * 256);
     const colG = Math.floor(Math.random() * 256);
     const colB = Math.floor(Math.random() * 256);
@@ -81,7 +94,7 @@ export const POST = async (req: Request) => {
     const pixelAccount = await connection.getAccountInfo(pixelPubkey);
     if (!pixelAccount) {
       transaction.add(
-        await (program.methods.createPixel(posX, posY, colR, colG, colB) as any)
+        await program.methods.createPixel(posX, posY, colR, colG, colB)
           .accounts({
             pixel: pixelPubkey,
             user: userPubkey,
@@ -91,18 +104,22 @@ export const POST = async (req: Request) => {
       );
     } else {
       transaction.add(
-        await (program.methods.updatePixel(colR, colG, colB) as any)
+        await program.methods.updatePixel(colR, colG, colB)
           .accounts({
             pixel: pixelPubkey,
-            user: userPubkey,
           })
           .instruction()
       );
     }
 
+    // Get the latest blockhash
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = userPubkey;
+
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction,
+        transaction: transaction, // Pass the Transaction object directly
         message: `Update pixel at (${posX}, ${posY}) with color rgb(${colR}, ${colG}, ${colB})`,
       },
     });
@@ -110,7 +127,6 @@ export const POST = async (req: Request) => {
     return Response.json(payload, { headers });
   } catch (err) {
     console.error(err);
-    // Return a JSON error response instead of plain text
     return Response.json(
       { error: "An error occurred", details: err instanceof Error ? err.message : String(err) },
       { status: 500, headers }
